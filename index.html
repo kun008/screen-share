@@ -18,7 +18,7 @@
 <h2>发起屏幕共享 <span class="tag">共享者</span></h2>
 <div class="grid">
 <div><label for="resolution">屏幕分辨率</label><select id="resolution"><option value="720">1280 × 720 (720p)</option><option value="1080" selected>1920 × 1080 (1080p)</option><option value="1440">2560 × 1440 (2K)</option><option value="2160">3840 × 2160 (4K)</option><option value="native">设备原始分辨率</option></select></div>
-<div><label for="fps">目标帧率</label><select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60" selected>60 FPS</option></select></div><div style="grid-column:1/-1"><label><input id="systemAudio" type="checkbox" checked style="width:auto;margin-right:8px">共享系统声音（浏览器支持时）</label><p class="muted">共享时请在浏览器的“共享音频/系统音频”选项中允许声音。部分手机和浏览器不支持系统声音捕获。</p></div>
+<div><label for="fps">目标帧率</label><select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60" selected>60 FPS</option></select></div><div style="grid-column:1/-1"><label><input id="systemAudio" type="checkbox" checked style="width:auto;margin-right:8px">共享系统声音（浏览器支持时）</label><p class="muted"><strong>重要：勾选此项后，点击“开始共享”还要在浏览器弹出的屏幕选择窗口中，选择要共享的标签页/屏幕，并勾选“共享标签页音频”或“共享系统音频”。如果弹窗里没有音频选项，当前浏览器或设备可能不支持声音采集。仅勾选这里还不够。</strong> 手机浏览器通常不能作为共享者捕获系统声音，建议共享者使用电脑 Chrome 或 Edge。</p></div>
 </div>
 <div style="margin-top:16px"><label for="serverUrl">信令服务器地址（已自动配置）</label><input id="serverUrl" type="url" placeholder="wss://你的服务名.onrender.com/ws" autocomplete="url"><p class="muted">此地址用于建立设备间连接。服务器地址已自动配置；如以后更换 Render 服务，再修改这里即可。</p></div>
 <div class="actions"><button class="primary" id="start">开始共享并创建房间</button><button class="danger" id="stop" disabled>停止共享</button></div>
@@ -64,7 +64,7 @@ async function startSharing(){
   roomId=makeRoom();isHost=true;
   await connectSignal(url,ws=>ws.send(JSON.stringify({type:"host",room:roomId})));
   signal.onmessage=async ev=>{const m=JSON.parse(ev.data);if(m.type==="host-ready"){setHostMessage("房间已创建，等待观看者加入。请复制分享链接发送给对方。");$("roomStatus").textContent=roomId;}else if(m.type==="viewer-joined"){await createOffer(m.peerId);}else if(m.type==="answer"){const pc=hostPeers.get(m.from);if(pc)await pc.setRemoteDescription(m.description);}else if(m.type==="ice"){const pc=hostPeers.get(m.from);if(pc&&m.candidate)try{await pc.addIceCandidate(m.candidate);}catch(e){console.warn(e);}}else if(m.type==="viewer-left"){const pc=hostPeers.get(m.peerId);if(pc)pc.close();hostPeers.delete(m.peerId);setHostMessage("一位观看者已离开。仍可继续分享。");}else if(m.type==="error"){setHostMessage(m.message);}};
-  const track=localStream.getVideoTracks()[0];track.onended=stopSharing;const audioTracks=localStream.getAudioTracks();if($("systemAudio").checked&&!audioTracks.length){setHostMessage("屏幕已开始共享，但浏览器没有提供系统声音轨道。请在屏幕选择窗口中勾选“共享音频/系统音频”，或使用支持系统音频捕获的浏览器。");}
+  const track=localStream.getVideoTracks()[0];track.onended=stopSharing;const audioTracks=localStream.getAudioTracks();if($("systemAudio").checked&&!audioTracks.length){setHostMessage("⚠️ 已成功共享画面，但没有采集到声音！请停止共享后重新开始，在浏览器弹出的屏幕/标签页选择窗口中明确勾选“共享标签页音频/共享系统音频”。如果没有这个选项，请换用电脑 Chrome 或 Edge，并共享浏览器标签页进行测试。");}else if(audioTracks.length){setHostMessage("✓ 已采集到 "+audioTracks.length+" 条声音轨道，正在等待观看者连接。请确认电脑正在播放声音。");}
   $("shareLink").value=location.origin+location.pathname+"?room="+encodeURIComponent(roomId)+"&server="+encodeURIComponent(url);
   $("shareLinkArea").classList.remove("hidden");$("stop").disabled=false;
   $("connectionState").textContent="等待观看者";setHostMessage("屏幕已开始捕获，房间号："+roomId+"。把分享链接发给观看者即可。");
@@ -72,7 +72,7 @@ async function startSharing(){
 }
 async function createOffer(peerId){
  const pc=new RTCPeerConnection(rtcConfig);hostPeers.set(peerId,pc);
- localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+ localStream.getTracks().forEach(t=>{pc.addTrack(t,localStream);if(t.kind==="audio"){t.onended=()=>setHostMessage("⚠️ 共享声音轨道已结束，观看者将听不到后续声音。");t.onmute=()=>setHostMessage("⚠️ 浏览器暂时没有提供声音数据，请检查正在播放的声音来源。");t.onunmute=()=>setHostMessage("✓ 声音轨道正在传输。");}});
  pc.onicecandidate=e=>{if(e.candidate)send({type:"ice",target:peerId,candidate:e.candidate});};
  pc.onconnectionstatechange=()=>{$("connectionState").textContent=pc.connectionState;};
  const offer=await pc.createOffer();await pc.setLocalDescription(offer);send({type:"offer",target:peerId,description:pc.localDescription});
