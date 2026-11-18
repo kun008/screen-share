@@ -1,16 +1,10 @@
 {
-  "name": "screenshare-signaling",
+  "name": "screenshare-signaling-server",
   "version": "1.0.0",
   "private": true,
-  "description": "WebSocket signaling server for the ScreenShare WebRTC app",
+  "description": "WebRTC signaling server for ScreenShare",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
-  }
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "express": "^4.21.2", "ws": "^8.18.0" }
 }
