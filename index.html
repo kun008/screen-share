@@ -32,7 +32,7 @@
 <div class="actions"><button class="primary" id="join">加入并观看</button><button class="secondary" id="leave" disabled>离开房间</button></div>
 <p class="message" id="viewerMessage">尚未加入房间。</p>
 </section>
-<section class="panel"><h2>屏幕预览</h2><div id="placeholder">尚未收到屏幕画面<br><br>创建房间并开始共享后，观看者的画面和声音会显示/播放在这里。</div><video id="remoteVideo" autoplay playsinline class="hidden"></video><div class="stats"><span>连接状态：<b id="connectionState">未连接</b></span><span>房间号：<b id="roomStatus">-</b></span></div></section>
+<section class="panel"><h2>屏幕预览</h2><div id="placeholder">尚未收到屏幕画面<br><br>创建房间并开始共享后，观看者的画面和声音会显示/播放在这里。</div><video id="remoteVideo" autoplay muted playsinline controls class="hidden"></video><div class="actions"><button class="secondary hidden" id="enableAudio">点击开启声音</button></div><div class="stats"><span>连接状态：<b id="connectionState">未连接</b></span><span>房间号：<b id="roomStatus">-</b></span></div></section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -51,8 +51,8 @@ function serverAddress(value){let v=(value||"").trim();if(!v)throw new Error("�
 function makeRoom(){return Math.random().toString(36).slice(2,10).toUpperCase();}
 function connectSignal(url,onOpen){return new Promise((resolve,reject)=>{const ws=new WebSocket(url);const timer=setTimeout(()=>{ws.close();reject(new Error("连接服务器超时，请检查服务器地址或部署状态。"));},12000);ws.onopen=()=>{clearTimeout(timer);signal=ws;onOpen(ws);resolve(ws);};ws.onerror=()=>{clearTimeout(timer);reject(new Error("无法连接信令服务器，请确认 Render 服务已启动且地址正确。"));};ws.onclose=()=>{$("connectionState").textContent="连接已断开";};});}
 function send(data){if(!signal||signal.readyState!==WebSocket.OPEN)throw new Error("信令服务器连接已断开。");signal.send(JSON.stringify(data));}
-function showRemote(stream){$("remoteVideo").srcObject=stream;$("remoteVideo").classList.remove("hidden");$("placeholder").classList.add("hidden");}
-function resetRemote(){$("remoteVideo").srcObject=null;$("remoteVideo").classList.add("hidden");$("placeholder").classList.remove("hidden");}
+function showRemote(stream){const video=$("remoteVideo");video.srcObject=stream;video.muted=true;video.playsInline=true;video.classList.remove("hidden");$("placeholder").classList.add("hidden");$("enableAudio").classList.remove("hidden");video.play().then(()=>setViewerMessage("画面已连接。当前先静音播放；点击“开启声音”即可尝试播放共享音频。")).catch(()=>setViewerMessage("已收到视频流。若画面未自动播放，请点击视频画面上的播放按钮。"));}
+function resetRemote(){$("remoteVideo").pause();$("remoteVideo").srcObject=null;$("remoteVideo").muted=true;$("remoteVideo").classList.add("hidden");$("enableAudio").classList.add("hidden");$("placeholder").classList.remove("hidden");}
 async function startSharing(){
  if(!navigator.mediaDevices?.getDisplayMedia){setHostMessage("当前浏览器不支持屏幕捕获，请使用最新版 Chrome 或 Edge，并通过 HTTPS 访问。");return;}
  let url;try{url=serverAddress($("serverUrl").value);localStorage.setItem("screenshare-server-url",url);}catch(e){setHostMessage(e.message);return;}
@@ -89,13 +89,13 @@ async function joinRoom(){
  let url;try{url=serverAddress($("viewerServerUrl").value||incomingServer||savedServer);}catch(e){setViewerMessage(e.message);return;}
  $("join").disabled=true;setViewerMessage("正在连接房间……");
  try{
-  viewerPeer=new RTCPeerConnection(rtcConfig);viewerPeer.ontrack=e=>{showRemote(e.streams[0]);$("remoteVideo").play().catch(()=>setViewerMessage("画面已连接；如果没有声音，请点击视频区域一次以允许浏览器播放音频。"));};viewerPeer.onicecandidate=e=>{if(e.candidate)send({type:"ice",candidate:e.candidate});};viewerPeer.onconnectionstatechange=()=>{$("connectionState").textContent=viewerPeer.connectionState;};
+  viewerPeer=new RTCPeerConnection(rtcConfig);viewerPeer.ontrack=e=>{const stream=e.streams&&e.streams[0]?e.streams[0]:new MediaStream([e.track]);if($("remoteVideo").srcObject&&$("remoteVideo").srcObject!==stream){for(const track of stream.getTracks())if(!$("remoteVideo").srcObject.getTracks().some(t=>t.id===track.id))$("remoteVideo").srcObject.addTrack(track);}else{showRemote(stream);}};viewerPeer.onicecandidate=e=>{if(e.candidate)send({type:"ice",candidate:e.candidate});};viewerPeer.onconnectionstatechange=()=>{$("connectionState").textContent=viewerPeer.connectionState;};
   await connectSignal(url,ws=>ws.send(JSON.stringify({type:"join",room})));
   signal.onmessage=async ev=>{const m=JSON.parse(ev.data);if(m.type==="joined"){$("roomStatus").textContent=room;setViewerMessage("已进入房间，正在等待共享者的视频流……");$("leave").disabled=false;}else if(m.type==="offer"){await viewerPeer.setRemoteDescription(m.description);const answer=await viewerPeer.createAnswer();await viewerPeer.setLocalDescription(answer);send({type:"answer",target:m.from,description:viewerPeer.localDescription});setViewerMessage("已收到共享邀请，正在建立视频和声音连接……");}else if(m.type==="ice"&&m.candidate){try{await viewerPeer.addIceCandidate(m.candidate);}catch(e){console.warn(e);}}else if(m.type==="host-stopped"){setViewerMessage("共享者已停止屏幕共享。");resetRemote();}else if(m.type==="error"){setViewerMessage(m.message);leaveRoom();}};
  }catch(e){if(viewerPeer){viewerPeer.close();viewerPeer=null;}if(signal){signal.close();signal=null;}$("join").disabled=false;setViewerMessage("加入失败："+e.message);}
 }
 function leaveRoom(){if(viewerPeer){viewerPeer.close();viewerPeer=null;}if(signal){signal.close();signal=null;}$("join").disabled=false;$("leave").disabled=true;$("connectionState").textContent="未连接";$("roomStatus").textContent="-";resetRemote();setViewerMessage("已离开房间。");}
-$("start").addEventListener("click",startSharing);$("stop").addEventListener("click",stopSharing);$("join").addEventListener("click",joinRoom);$("leave").addEventListener("click",leaveRoom);
+$("start").addEventListener("click",startSharing);$("stop").addEventListener("click",stopSharing);$("join").addEventListener("click",joinRoom);$("leave").addEventListener("click",leaveRoom);$("enableAudio").addEventListener("click",async()=>{const video=$("remoteVideo");video.muted=false;try{await video.play();setViewerMessage("已尝试开启声音。如果仍然无声，请检查共享者是否勾选系统声音，以及浏览器是否允许播放。");$("enableAudio").textContent="声音已开启";}catch(e){video.muted=true;setViewerMessage("浏览器暂时阻止了声音播放，请再点击一次视频画面或声音按钮。");}});
 $("copyLink").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("shareLink").value);setHostMessage("分享链接已复制，可以发送给观看者。");}catch(e){$("shareLink").select();document.execCommand("copy");setHostMessage("分享链接已复制。");}});
 window.addEventListener("beforeunload",()=>{if(localStream)localStream.getTracks().forEach(t=>t.stop());if(signal)signal.close();});
 </script>
