@@ -20,7 +20,7 @@
 <div><label for="resolution">屏幕分辨率</label><select id="resolution"><option value="720">1280 × 720 (720p)</option><option value="1080" selected>1920 × 1080 (1080p)</option><option value="1440">2560 × 1440 (2K)</option><option value="2160">3840 × 2160 (4K)</option><option value="native">设备原始分辨率</option></select></div>
 <div><label for="fps">目标帧率</label><select id="fps"><option value="15">15 FPS</option><option value="30">30 FPS</option><option value="60" selected>60 FPS</option></select></div>
 </div>
-<div style="margin-top:16px"><label for="serverUrl">信令服务器地址（部署服务器后填写一次）</label><input id="serverUrl" type="url" placeholder="wss://你的服务名.onrender.com/ws" autocomplete="url"><p class="muted">此地址用于建立设备间连接。服务器部署完成后，把 Render 提供的地址填在这里；分享链接会自动带上该地址。</p></div>
+<div style="margin-top:16px"><label for="serverUrl">信令服务器地址（已自动配置）</label><input id="serverUrl" type="url" placeholder="wss://你的服务名.onrender.com/ws" autocomplete="url"><p class="muted">此地址用于建立设备间连接。服务器地址已自动配置；如以后更换 Render 服务，再修改这里即可。</p></div>
 <div class="actions"><button class="primary" id="start">开始共享并创建房间</button><button class="danger" id="stop" disabled>停止共享</button></div>
 <div id="shareLinkArea" class="hidden"><label style="margin-top:18px">把下面的链接发给观看者</label><div class="linkbox"><input id="shareLink" readonly><button class="secondary" id="copyLink">复制链接</button></div></div>
 <p class="message" id="hostMessage">等待开始。共享者需要使用最新版 Chrome 或 Edge，并允许浏览器捕获屏幕。</p>
@@ -43,7 +43,7 @@ const incomingRoom=params.get("room");
 const incomingServer=params.get("server");
 if(incomingRoom){$("roomInput").value=incomingRoom;$("viewerRoomLabel").textContent="已从分享链接读取房间号："+incomingRoom;}
 if(incomingServer){$("viewerServerUrl").value=incomingServer;}
-const savedServer=localStorage.getItem("screenshare-server-url")||"";
+const savedServer=localStorage.getItem("screenshare-server-url")||"wss://screen-share-7q9j.onrender.com/ws";
 $("serverUrl").value=savedServer;
 function setHostMessage(t){$("hostMessage").textContent=t;}
 function setViewerMessage(t){$("viewerMessage").textContent=t;}
